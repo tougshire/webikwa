@@ -1,8 +1,10 @@
 import datetime
 import re
+import sys
 from django import forms
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 from modelcluster.fields import ParentalKey, ParentalManyToManyField
 from modelcluster.contrib.taggit import ClusterTaggableManager
 from taggit.models import TaggedItemBase
@@ -69,14 +71,42 @@ class RedirectPage(Page):
             path_components=[self.target_page.slug]
             return super().route(request, path_components)
 
+class ArticleSingularPage(Page):
+
+    target_page = models.ForeignKey(
+        'wagtailcore.Page',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
+
+    content_panels = Page.content_panels + [
+        PageChooserPanel('target_page', page_type=['webikwa.ArticlePage']),
+    ]
+
 
 class ArticleIndexPage(Page):
     intro = RichTextField(blank=True)
     show_pagetitle=models.BooleanField( default=True, help_text="If the page title should be shown" )
 
+    order_by_choices=(
+        ('-order_by_date','Orderby Date >'),
+        ('order_by_date','Orderby Date <'),
+        ('-latest_revision_created_at','Update Date/Time >'),
+        ('latest_revision_created_at','Update Date/Time <'),
+        ('-first_published_at','Publish Date/Time >'),
+        ('first_published_at','Publish Date/Time <'),
+        ('title','Title'),
+        ('-title','Title >'),
+    )
+
+    order_by = models.CharField(max_length=40,blank=True, choices=order_by_choices, default=order_by_choices[0],help_text='The article attribute to determine the order in which articles will be displayed')
+
     content_panels = Page.content_panels + [
         FieldPanel('show_pagetitle'),
-        FieldPanel('intro')
+        FieldPanel('intro'),
+        FieldPanel('order_by'),
     ]
 
     def get_context(self, request):
@@ -84,7 +114,7 @@ class ArticleIndexPage(Page):
         tag = request.GET.get('tag')
 
         context = super().get_context(request)
-        ArticlePages = self.get_children().live().order_by('-first_published_at')
+        ArticlePages = self.get_children().live().order_by(self.order_by)
         if tag:
             ArticlePages = ArticlePage.objects.filter(tags__name=tag)
 
@@ -99,15 +129,25 @@ class SidebarPage(Page):
     show_pagetitle=models.BooleanField( default=True, help_text="If the page title should be shown" )
     location = models.CharField("location", max_length=40, blank=True, choices=(("left","left"),("right","right"),("top","top"),("bottom","bottom")))
 
+    order_by_choices=(
+        ('-order_by_date','Orderby Date >'),
+        ('order_by_date','Orderby Date <'),
+        ('title','Title'),
+        ('-title','Title >'),
+    )
+
+    order_by = models.CharField(max_length=40,blank=True, choices=order_by_choices, default=order_by_choices[0], help_text='The article attribute to determine the order in which articles will be displayed')
+
     content_panels = Page.content_panels + [
         FieldPanel('show_pagetitle'),
         FieldPanel('intro'),
-        FieldPanel('location')
+        FieldPanel('location'),
+        FieldPanel('order_by')
     ]
 
     def get_context(self, request):
         context = super().get_context(request)
-        ArticlePages = self.get_children().live().order_by('-first_published_at')
+        ArticlePages = self.get_children().live().order_by(self.order_by)
         context['articlepages'] = ArticlePages
         return context
 
@@ -164,6 +204,7 @@ class BaseArticlePage(Page):
 class ArticlePage(BaseArticlePage):
 
     date = models.DateField("Post date", default=datetime.date.today)
+    order_by_date = models.DateTimeField(default=timezone.now, blank=True, help_text="A date optionally used for ordering. Can be used instead of post date in order to avoid changing the post date")
     summary = models.CharField(max_length=250, blank=True, help_text='A summary to be displayed instead of the body for index views')
 
     authors = ParentalManyToManyField('webikwa.Author', blank=True)
@@ -177,6 +218,7 @@ class ArticlePage(BaseArticlePage):
         MultiFieldPanel(
             [
                 FieldPanel('date'),
+                FieldPanel('order_by_date'),
                 FieldPanel('authors', widget=forms.CheckboxSelectMultiple),
                 FieldPanel('tags'),
             ],
@@ -194,6 +236,7 @@ class ArticlePage(BaseArticlePage):
         ),
         MultiFieldPanel(
             [
+                InlinePanel('article_images', label="Article images"),
                 InlinePanel('gallery_images', label="Gallery images"),
                 FieldPanel('show_gallery'),
             ]
@@ -236,57 +279,70 @@ class ArticlePage(BaseArticlePage):
         return context
 
 
-class FreeArticlePage(BaseArticlePage):
+# class FreeArticlePage(BaseArticlePage):
 
-    date = models.DateField("Post date", default=datetime.date.today)
-    show_gallery = models.BooleanField("show gallery", default=True, help_text="Show the gallery")
+#     date = models.DateField("Post date", default=datetime.date.today)
+#     order_by_date = models.DateTimeField(default=timezone.now, blank=True, help_text="A date optionally used for ordering. Can be used instead of post date in order to avoid changing the post date")
+#     show_gallery = models.BooleanField("show gallery", default=True, help_text="Show the gallery")
 
-    class Meta:
-        verbose_name = "Free Article"
+#     class Meta:
+#         verbose_name = "Free Article"
 
-    def get_context(self, request):
+#     def get_context(self, request):
 
-        context=super().get_context(request)
-        context['sidebars'] = get_sidebars(request)
-        return context
+#         context=super().get_context(request)
+#         context['sidebars'] = get_sidebars(request)
+#         return context
 
-    content_panels = Page.content_panels + [
+#     content_panels = Page.content_panels + [
 
-        FieldPanel('body_md'),
-        FieldPanel('body_sf'),
-        MultiFieldPanel(
-            [
-                FieldPanel('document'),
-                FieldPanel('show_doc_link'),
-            ],
-            heading="Document"
-        ),
-        MultiFieldPanel(
-            [
-                InlinePanel('gallery_images', label="Gallery images"),
-                FieldPanel('show_gallery'),
-            ]
-        ),
-        MultiFieldPanel(
-            [
-                FieldPanel('embed_url'),
-                FieldPanel('embed_frame_style'),
-            ],
-            heading="Embedded Content"
-        ),
+#         MultiFieldPanel(
+#             [
+#                 FieldPanel('date'),
+#                 FieldPanel('order_by_date'),
+#             ],
+#             heading="Article information"
+#         ),
+#         FieldPanel('body_md'),
+#         FieldPanel('body_sf'),
+#         MultiFieldPanel(
+#             [
+#                 FieldPanel('document'),
+#                 FieldPanel('show_doc_link'),
+#             ],
+#             heading="Document"
+#         ),
+#         MultiFieldPanel(
+#             [
+#                 InlinePanel('gallery_images', label="Gallery images"),
+#                 FieldPanel('show_gallery'),
+#             ]
+#         ),
+#         MultiFieldPanel(
+#             [
+#                 FieldPanel('embed_url'),
+#                 FieldPanel('embed_frame_style'),
+#             ],
+#             heading="Embedded Content"
+#         ),
 
-    ]
+#     ]
 
-    search_fields = Page.search_fields + [
-        index.SearchField('body_md'),
-        index.SearchField('body_sf'),
-    ]
+#     search_fields = Page.search_fields + [
+#         index.SearchField('body_md'),
+#         index.SearchField('body_sf'),
+#     ]
 
 class SidebarArticlePage(BaseArticlePage):
+
+    date = models.DateField("Post date", default=datetime.date.today)
+    order_by_date = models.DateTimeField(default=timezone.now, blank=True, help_text="A date optionally used for ordering. Can be used instead of post date in order to avoid changing the post date")
 
     parent_page_types = ["SidebarPage"]
 
     content_panels = Page.content_panels + [
+
+
         FieldPanel('body_md'),
         FieldPanel('body_sf'),
         MultiFieldPanel(
@@ -378,6 +434,18 @@ class ArticleStaticTagsIndexPage(Page):
     separate_tag_groups = models.BooleanField(default=True, help_text="If the ArticlePages should be separated by tag")
     show_tag_titles = models.BooleanField(default=True, help_text='If the tag name should be displayed as a title to accompany the ArticlePages')
 
+    order_by_choices=(
+        ('-order_by_date','Orderby Date >'),
+        ('order_by_date','Orderby Date <'),
+        ('-latest_revision_created_at','Update Date/Time >'),
+        ('latest_revision_created_at','Update Date/Time <'),
+        ('-first_published_at','Publish Date/Time >'),
+        ('first_published_at','Publish Date/Time <'),
+        ('title','Title'),
+        ('-title','Title >'),
+    )
+
+    order_by = models.CharField(max_length=40,choices=order_by_choices, default=order_by_choices[0], help_text='The article attribute to determine the order in which articles will be displayed')
     content_panels = Page.content_panels + [
 
 
@@ -385,6 +453,7 @@ class ArticleStaticTagsIndexPage(Page):
         MultiFieldPanel(
             [
                 FieldPanel('included_tag_names_string'),
+                FieldPanel('order_by'),
                 MultiFieldPanel([
                     FieldPanel('tag_titles_string'),
                     FieldPanel('group_titles_string'),
@@ -422,7 +491,7 @@ class ArticleStaticTagsIndexPage(Page):
                 included_tag_name = included_tag_names[i].strip()
                 new_article_page_set={}
 
-                new_article_page_set['article_pages'] = ArticlePage.objects.live().filter(tags__name=included_tag_name).order_by('-latest_revision_created_at')
+                new_article_page_set['article_pages'] = ArticlePage.objects.live().filter(tags__name=included_tag_name).order_by(self.order_by)
 
                 if new_article_page_set['article_pages']:
                     new_article_page_set['tagname'] = included_tag_name
