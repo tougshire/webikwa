@@ -198,11 +198,13 @@ class BaseArticlePage(Page):
         return context
 
     def featured_image(self):
-        items = self.article_images.all()
-        for item in items:
-            if item.featured_image:
-                return item
-        return None
+        try:
+            return self.article_images.filter(is_featured=True).first()
+        except ArticlePageImage.DoesNotExist:
+            try:
+                return self.article_images.first()
+            except ArticlePageImage.DoesNotExist:
+                return None
 
 
 class ArticlePage(BaseArticlePage):
@@ -282,61 +284,6 @@ class ArticlePage(BaseArticlePage):
 
         return context
 
-
-# class FreeArticlePage(BaseArticlePage):
-
-#     date = models.DateField("Post date", default=datetime.date.today)
-#     order_by_date = models.DateTimeField(default=timezone.now, blank=True, help_text="A date optionally used for ordering. Can be used instead of post date in order to avoid changing the post date")
-#     show_gallery = models.BooleanField("show gallery", default=True, help_text="Show the gallery")
-
-#     class Meta:
-#         verbose_name = "Free Article"
-
-#     def get_context(self, request):
-
-#         context=super().get_context(request)
-#         context['sidebars'] = get_sidebars(request)
-#         return context
-
-#     content_panels = Page.content_panels + [
-
-#         MultiFieldPanel(
-#             [
-#                 FieldPanel('date'),
-#                 FieldPanel('order_by_date'),
-#             ],
-#             heading="Article information"
-#         ),
-#         FieldPanel('body_md'),
-#         FieldPanel('body_sf'),
-#         MultiFieldPanel(
-#             [
-#                 FieldPanel('document'),
-#                 FieldPanel('show_doc_link'),
-#             ],
-#             heading="Document"
-#         ),
-#         MultiFieldPanel(
-#             [
-#                 InlinePanel('gallery_images', label="Gallery images"),
-#                 FieldPanel('show_gallery'),
-#             ]
-#         ),
-#         MultiFieldPanel(
-#             [
-#                 FieldPanel('embed_url'),
-#                 FieldPanel('embed_frame_style'),
-#             ],
-#             heading="Embedded Content"
-#         ),
-
-#     ]
-
-#     search_fields = Page.search_fields + [
-#         index.SearchField('body_md'),
-#         index.SearchField('body_sf'),
-#     ]
-
 class SidebarArticlePage(BaseArticlePage):
 
     date = models.DateField("Post date", default=datetime.date.today)
@@ -377,7 +324,7 @@ class ArticlePageImage(Orderable):
     display_with_summary = models.BooleanField("with summary", default=False, help_text="If this image should appear where the article summary is shown")
     display_before_body = models.BooleanField("before body", default=False, help_text="If this image should appear before the body of the article")
     display_after_body = models.BooleanField("after_body", default=False, help_text="If this image should appear after the body of the article")
-    is_featured = models.IntegerField("is featured", default=1, choices=((0, "Never"),(1, "If First")), help_text="If this image is the featured image to be used in social media links and similar contexts")
+    is_featured = models.BooleanField("is featured", default=False, help_text="If this image is the featured image to be used in social media links and similar contexts. Only one should be selected. ")
 
     panels = [
         MultiFieldPanel([
