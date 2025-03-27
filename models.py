@@ -381,8 +381,7 @@ class ArticleStaticTagsIndexPage(Page):
     included_tag_names_string = models.CharField("tags included", max_length=255, blank=True, help_text="A comma separated list of tags to be included in this page which can also be grouped - separate groups with semicolon")
     tag_titles_string = models.CharField("tag titles", max_length=255, blank=True, help_text="A comma separated list of titles to be used instead of the tag names - not separated by group")
     group_titles_string = models.CharField("group titles", max_length=255, blank=True, help_text="A comma separated list of titles to be used for tag groups")
-    apply_special_formatting = models.IntegerField("apply special formatting", default=0, help_text="The group number up to which special formatting should be applied.  Implementation may vary by template app")
-    show_body_in_index = models.IntegerField("show body instead of summary", default=0, help_text="The group number up to which articles will show the entire body instead of the summary")
+    full_body_groups = models.CharField("full body groups", max_length=30, blank=True, default="1",help_text="A comma separated list of the tag group numbers for which the full body instead of summary should be shown in an index page. '1' is the first group.  ex: '1,2'")
     separate_tag_groups = models.BooleanField(default=True, help_text="If the ArticlePages should be separated by tag")
     show_tag_titles = models.BooleanField(default=True, help_text='If the tag name should be displayed as a title to accompany the ArticlePages')
 
@@ -413,9 +412,8 @@ class ArticleStaticTagsIndexPage(Page):
                 ], heading="Tag Titles"),
                 FieldPanel('show_tag_titles'),
                 MultiFieldPanel([
-                    FieldPanel('show_body_in_index'),
-                    FieldPanel('apply_special_formatting'),
-                ],heading="First Groups")
+                    FieldPanel('full_body_groups'),
+                ],heading="Special Tag Groups")
             ]
         )
     ]
@@ -423,6 +421,18 @@ class ArticleStaticTagsIndexPage(Page):
     def get_context(self, request):
 
         context = super().get_context(request)
+
+        full_body_groups=[]
+        full_body_group_pieces = [number for number in self.full_body_groups.split(',')]
+        for piece in full_body_group_pieces:
+            try:
+                full_body_groups.append(int(piece))
+            except ValueError as e:
+                pass
+
+        context['full_body_groups'] = full_body_groups
+
+        print('tp253rd40', context['full_body_groups'])
 
         article_page_groups = []
 
@@ -459,10 +469,10 @@ class ArticleStaticTagsIndexPage(Page):
 
                 article_page_groups.append(new_article_page_group)
 
+        context['article_page_groups'] = article_page_groups
 
         context['sidebars'] = get_sidebars(request)
 
-        context['article_page_groups'] = article_page_groups
         # context['first_group_is_special'] = self.first_group_is_special
 
         return context
