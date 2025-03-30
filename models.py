@@ -254,7 +254,6 @@ class ArticlePage(BaseArticlePage):
             ],
             heading="Embedded Content"
         ),
-
     ]
 
     search_fields = Page.search_fields + [
@@ -384,6 +383,7 @@ class ArticleStaticTagsIndexPage(Page):
     full_body_groups = models.CharField("full body groups", max_length=30, blank=True, default="1",help_text="A comma separated list of the tag group numbers for which the full body instead of summary should be shown in an index page. '1' is the first group.  ex: '1,2'")
     separate_tag_groups = models.BooleanField(default=True, help_text="If the ArticlePages should be separated by tag")
     show_tag_titles = models.BooleanField(default=True, help_text='If the tag name should be displayed as a title to accompany the ArticlePages')
+    custom_css = models.TextField(blank=True, help_text="Custom css to be added to the html head section when this page is displayed")
 
     order_by_choices=(
         ('-order_by_date','Orderby Date >'),
@@ -413,7 +413,8 @@ class ArticleStaticTagsIndexPage(Page):
                 FieldPanel('show_tag_titles'),
                 MultiFieldPanel([
                     FieldPanel('full_body_groups'),
-                ],heading="Special Tag Groups")
+                    FieldPanel('custom_css'),
+                ],heading="Formatting")
             ]
         )
     ]
