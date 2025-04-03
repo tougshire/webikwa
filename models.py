@@ -530,13 +530,21 @@ class SiteTemplateSettings(BaseSiteSetting):
         default="New Wibewa Wagtail Blog",
         help_text="The site description to be displayed near the banner image or banner text"
     )
+    show_topbar=models.BooleanField(
+        default=False,
+        help_text="If the top sidebar should be shown"
+    )
     show_leftbar=models.BooleanField(
         default=False,
-        help_text="If the left sidebar should be shown - requires a template named wibewa/includes/sidebarleft.html"
+        help_text="If the left sidebar should be shown"
     )
     show_rightbar=models.BooleanField(
         default=False,
-        help_text="If the right sidebar should be shown - requires a template named wibewa/includes/sidebarright.html"
+        help_text="If the right sidebar should be shown"
+    )
+    show_bottombar=models.BooleanField(
+        default=False,
+        help_text="If the bottom sidebar should be shown"
     )
     mainmenu_location=models.CharField(
         "main menu location",

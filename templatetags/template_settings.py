@@ -21,6 +21,7 @@ def get_template_settings(context):
             "banner_image_style",
             "banner_text",
             "site_description",
+            "show_topbar",
             "show_leftbar",
             "show_rightbar",
             "mainmenu_location",
