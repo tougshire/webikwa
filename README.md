@@ -8,7 +8,7 @@ This project is in development and there may be breaking changes until this note
 
 ## Installation
 
-Webikwa requires webikwa_base, touglates and wagtail_modeladmin. If you're using a different template app than webikwa_base, you can substitute that app
+Webikwa requires webikwa_templates, touglates and wagtail_modeladmin. If you're using a different template app than webikwa_templates, you can substitute that app
 
 These instructions are written with the assumption that you're starting a new project
 
@@ -16,7 +16,7 @@ These instructions are written with the assumption that you're starting a new pr
 * pip install [wagtail-markdown](https://pypi.org/project/wagtail-markdown/)
 * pip install [wagtail_modeladmin](https://pypi.org/project/wagtail-modeladmin/)
 * git clone [https://github.com/tougshire/touglates](https://github.com/tougshire/touglates)
-* git clone [https://github.com/tougshire/webikwa_base](https://github.com/tougshire/webikwa_base)
+* git clone [https://github.com/tougshire/webikwa_templates](https://github.com/tougshire/webikwa_templates)
 * git clone [https://github.com/tougshire/webikwa](https://github.com/tougshire/webikwa)
 * add the following to INSTALLED_APPS:
     * "wagtail.contrib.settings"
@@ -24,7 +24,7 @@ These instructions are written with the assumption that you're starting a new pr
     * "wagtailmarkdown"
     * "wagtail.contrib.table_block",
 	* "touglates"
-	* "webikwa_base"
+	* "webikwa_templates"
 	* "webikwa"
 * Add the following to your settings:
 ```
