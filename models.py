@@ -1,12 +1,17 @@
 import datetime
+import json
+from pathlib import Path
 import re
 import sys
 from django import forms
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+import icalendar
+import recurring_ical_events
 from modelcluster.fields import ParentalKey, ParentalManyToManyField
 from modelcluster.contrib.taggit import ClusterTaggableManager
+import requests
 from taggit.models import TaggedItemBase
 
 from wagtail.admin.panels import (
@@ -45,9 +50,12 @@ def get_sidebars(request):
     for sidebarpage in SidebarPage.objects.live().all():
         sidebar = {"location":sidebarpage.location, "children":[]}
         for childpage in sidebarpage.get_children().specific().iterator():
-            print("tp2543k39", childpage._meta.get_fields())
-
-            child={"title":childpage.title, "body_md":childpage.specific.body_md, "body_sf":childpage.specific.body_sf, "context": childpage.specific.get_context(request)}
+            child={
+                "title":childpage.title, 
+                "body_md":childpage.specific.body_md, 
+                "body_sf":childpage.specific.body_sf, 
+                "calendar_format":childpage.specific.calendar_format, 
+                "context": childpage.specific.get_context(request)}
             sidebar["children"].append(child)
         sidebars.append(sidebar)
     return sidebars
@@ -133,6 +141,7 @@ class SidebarPage(Page):
         context['articlepages'] = ArticlePages
         return context
 
+
 @register_snippet
 class ArticlePageTag(TaggedItemBase):
     content_object = ParentalKey(
@@ -144,13 +153,21 @@ class ArticlePageTag(TaggedItemBase):
 
 class BaseArticlePage(Page):
 
+    CALENDAR_FORMAT_CHOICES=[
+        ("EVLS", "event list"),
+        ("MMON", "m-s month grid"),
+        ("SMON", "s-s month grid"), 
+        ("DTLS", "date list")
+    ]
     body_md = MarkdownField(blank=True, help_text="A markdown version of the body. Both this and the streamfield version body will be displayed if they have content")
     body_sf = StreamField(BodyStreamBlock(), blank=True, use_json_field=True, help_text="A streamfield version of the body. Both this and the markdown version body will be displayed if they have content")
     embed_url = models.URLField("Embed Target URL", max_length=765, blank=True, help_text="For pages with an iFrame, the URL of the embedded contnet")
     embed_frame_style = models.CharField("Frame Style", max_length=255, blank=True, default="width:90%; height:1600px;", help_text="For pages with an iFrame, styling for the frame")
     document = models.ForeignKey(get_document_model(), null=True,blank=True,on_delete=models.SET_NULL,)
     show_doc_link = models.BooleanField("show doc link", default=True, help_text="Show the document link automatically.  One reason to set false would be you're already placing a link in the body")
-
+    calendars=ParentalManyToManyField('IcalendarPage', blank=True)
+    ical_start_span_count = models.CharField("start,span,count", max_length=20, blank=True, default="-1,3660", help_text="Comma separated numbers representing the number of days to the starting date (can be negative), the number of days from the starting date to the ending date, and the max number of events to return")
+    calendar_format = models.CharField("calendar format", max_length=4, default="EVLS", choices=CALENDAR_FORMAT_CHOICES, help_text="The format for how the events are displayed")
     is_creatable = False
 
     class Meta:
@@ -172,6 +189,78 @@ class BaseArticlePage(Page):
             if allow_embed:
                 context['embed_url'] = self.embed_url
                 context['embed_frame_style'] = self.embed_frame_style
+
+        if self.calendars:
+
+            start_input, span_input, count_input = [0,3660,None]
+            ical_inputs = [ int(num) if num.strip().isnumeric() else None for num in self.ical_start_span_count.split(",")]
+            cd_events = []
+
+            try:
+                start_input = int(ical_inputs[0])
+            except (TypeError, IndexError):
+                pass
+            try:
+                span_input = int(ical_inputs[1])
+            except (TypeError, IndexError):
+                pass
+            try:
+                count_input = int(ical_inputs[2])
+            except (TypeError, IndexError):
+                pass
+
+            start_date = datetime.datetime.now() + datetime.timedelta(start_input)
+
+            if span_input is None:
+                span_input = 3660
+            end_date = start_date + datetime.timedelta(span_input)
+
+            for ical in self.calendars.all():
+
+                ical_string = ical.data
+                uidlinks={}
+                try:
+                    uidlinks = json.loads(ical.uid_links)
+                except json.JSONDecodeError:
+                    try:
+                        uidlinks = json.loads("{" + ical.uid_links + "}")
+                    except json.JSONDecodeError:
+                        print("JSON Decode error")
+
+                try:
+                    ical_calendar = icalendar.Calendar.from_ical(ical_string)
+                except ValueError:
+                    print("ICAL Parse Error")
+                    continue
+
+                ical_events = recurring_ical_events.of(ical_calendar).between(start_date, end_date)
+                for ical_event in ical_events:
+                    cd_event = {}
+                    cd_event["start"] =ical_event["DTSTART"].dt
+                    cd_event["start_type"] = type(cd_event["start"]).__name__
+                    cd_event["start_d"] =cd_event["start"].date() if cd_event["start_type"] == 'datetime' else cd_event["start"]
+
+                    cd_event["end"] =ical_event["DTEND"].dt
+
+                    try:
+                        cd_event["summary"] = ical_event["SUMMARY"]
+                    except KeyError:
+                        cd_event["summary"] = ""
+                    try:
+                        cd_event["description"] = ical_event["DESCRIPTION"]
+                    except KeyError:
+                        cd_event["description"] = ""
+
+                    if ical_event["UID"] in uidlinks:
+                        cd_event["link"] = uidlinks[ical_event["UID"]]
+
+
+                    cd_events.append(cd_event)
+                    if count_input is not None and count_input == len(cd_events):
+                        break
+                
+            context["events"] = sorted(cd_events, key = lambda event: event["start"])
+            
 
         return context
 
@@ -284,6 +373,15 @@ class SidebarArticlePage(BaseArticlePage):
             ],
             heading="Embedded Content"
         ),
+        MultiFieldPanel(
+            [
+                FieldPanel('calendars'),
+                FieldPanel('ical_start_span_count'),
+                FieldPanel('calendar_format'),
+
+            ],
+            heading="Calendar"
+        ),
 
     ]
 
@@ -393,8 +491,6 @@ class ArticleStaticTagsIndexPage(Page):
                 pass
 
         context['full_body_groups'] = full_body_groups
-
-        print('tp253rd40', context['full_body_groups'])
 
         article_page_groups = []
 
@@ -649,5 +745,24 @@ class ArticleCommentPage(Page):
             heading="Article information"
         ),
         FieldPanel('body'),
+    ]
+
+class IcalendarPage(Page):
+
+    source = models.URLField("source", blank=True, help_text="The ics source which will copied to the data")
+    data = models.TextField("body", blank=True, help_text="The ics data. If source is filled in, this will be overwritten. If you wish to edit this field, ensure the source field is blank")
+    uid_links = models.TextField("uids > links", blank=True, help_text="A json format list cross referencing uids from the data and links. ex: \"{ 483jfjc8@thiscalendersource.com\":\"https://thiswebsite.com/articles/somearticle\",{ 984jf8vdk@thiscalendarsource.com\":\"https://somewebsite.com/someevent.html\"}" )
+
+    content_panels = Page.content_panels + [
+        FieldPanel('source'),
+        FieldPanel('uid_links'),
+        FieldPanel('data'),
 
     ]
+
+    def save(self, *args, **kwargs):
+        if self.source:
+            calendar_response = requests.get(self.source)    
+            self.data = calendar_response.text
+
+        return super().save(*args, **kwargs)
