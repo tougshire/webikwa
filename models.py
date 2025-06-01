@@ -195,6 +195,7 @@ class BaseArticlePage(Page):
             start_input, span_input, count_input = [0,3660,None]
             ical_inputs = [ int(num) if num.strip().isnumeric() else None for num in self.ical_start_span_count.split(",")]
             cd_events = []
+            cd_events_grouped = {}
 
             try:
                 start_input = int(ical_inputs[0])
@@ -219,13 +220,9 @@ class BaseArticlePage(Page):
 
                 ical_string = ical.data
                 uidlinks={}
-                try:
-                    uidlinks = json.loads(ical.uid_links)
-                except json.JSONDecodeError:
-                    try:
-                        uidlinks = json.loads("{" + ical.uid_links + "}")
-                    except json.JSONDecodeError:
-                        print("JSON Decode error")
+        
+                for link in ical.uid_links.all():
+                    uidlinks[link.uid]=link.url
 
                 try:
                     ical_calendar = icalendar.Calendar.from_ical(ical_string)
@@ -236,7 +233,9 @@ class BaseArticlePage(Page):
                 ical_events = recurring_ical_events.of(ical_calendar).between(start_date, end_date)
                 for ical_event in ical_events:
                     cd_event = {}
-                    cd_event["start"] =ical_event["DTSTART"].dt
+                    uid = ical_event["UID"]
+                    cd_event["uid"] = uid
+                    cd_event["start"] = ical_event["DTSTART"].dt
                     cd_event["start_type"] = type(cd_event["start"]).__name__
                     cd_event["start_d"] =cd_event["start"].date() if cd_event["start_type"] == 'datetime' else cd_event["start"]
 
@@ -256,11 +255,21 @@ class BaseArticlePage(Page):
 
 
                     cd_events.append(cd_event)
-                    if count_input is not None and count_input == len(cd_events):
-                        break
+                    if uid not in cd_events_grouped:
+                        cd_events_grouped[uid] = cd_event
+                        cd_events_grouped[uid]["starts"] = [ cd_event["start"] ]
+                    else:
+                        cd_events_grouped[uid]["starts"].append( cd_event["start"])
+                        if cd_event["start"] < cd_events_grouped[uid]["start"]:
+                            cd_events_grouped[uid]["start"] = cd_event["start"]
                 
             context["events"] = sorted(cd_events, key = lambda event: event["start"])
-            
+
+            cd_events_grouped_list = []
+            for uid in cd_events_grouped:
+                cd_events_grouped[uid]["starts"].sort()
+                cd_events_grouped_list.append(cd_events_grouped[uid])
+            context["events_grouped"] = sorted(cd_events_grouped_list, key=lambda event: event["start"])
 
         return context
 
@@ -319,6 +328,15 @@ class ArticlePage(BaseArticlePage):
             ],
             heading="Embedded Content"
         ),
+        MultiFieldPanel(
+            [
+                FieldPanel('calendars'),
+                FieldPanel('ical_start_span_count'),
+                FieldPanel('calendar_format'),
+
+            ],
+            heading="Calendar"
+        )
     ]
 
     search_fields = Page.search_fields + [
@@ -345,6 +363,7 @@ class ArticlePage(BaseArticlePage):
 
             if not tag.name[0] == '_':
                 context['visible_tags'].append(tag)
+
 
         return context
 
@@ -751,13 +770,11 @@ class IcalendarPage(Page):
 
     source = models.URLField("source", blank=True, help_text="The ics source which will copied to the data")
     data = models.TextField("body", blank=True, help_text="The ics data. If source is filled in, this will be overwritten. If you wish to edit this field, ensure the source field is blank")
-    uid_links = models.TextField("uids > links", blank=True, help_text="A json format list cross referencing uids from the data and links. ex: \"{ 483jfjc8@thiscalendersource.com\":\"https://thiswebsite.com/articles/somearticle\",{ 984jf8vdk@thiscalendarsource.com\":\"https://somewebsite.com/someevent.html\"}" )
 
     content_panels = Page.content_panels + [
         FieldPanel('source'),
-        FieldPanel('uid_links'),
         FieldPanel('data'),
-
+        InlinePanel('uid_links',),
     ]
 
     def save(self, *args, **kwargs):
@@ -766,3 +783,13 @@ class IcalendarPage(Page):
             self.data = calendar_response.text
 
         return super().save(*args, **kwargs)
+
+class IcalendarLinkPage(Orderable, models.Model):
+    icalendar=ParentalKey(IcalendarPage, on_delete=models.CASCADE, null=True, related_name="uid_links")
+    uid=models.TextField(max_length=80,help_text="The UID of the event from ics data")
+    url=models.URLField(max_length=200, blank=True, help_text="The URL")
+    
+    panels = [
+        FieldPanel("uid"),
+        FieldPanel("url")
+    ]
