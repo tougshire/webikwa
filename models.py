@@ -253,7 +253,6 @@ class BaseArticlePage(Page):
                     if ical_event["UID"] in uidlinks:
                         cd_event["link"] = uidlinks[ical_event["UID"]]
 
-
                     cd_events.append(cd_event)
                     if uid not in cd_events_grouped:
                         cd_events_grouped[uid] = cd_event
@@ -264,12 +263,17 @@ class BaseArticlePage(Page):
                             cd_events_grouped[uid]["start"] = cd_event["start"]
                 
             context["events"] = sorted(cd_events, key = lambda event: event["start"])
+            if count_input is not None:
+                context["events"] = context["events"][:count_input]
+                
 
             cd_events_grouped_list = []
             for uid in cd_events_grouped:
                 cd_events_grouped[uid]["starts"].sort()
                 cd_events_grouped_list.append(cd_events_grouped[uid])
             context["events_grouped"] = sorted(cd_events_grouped_list, key=lambda event: event["start"])
+            if count_input is not None:
+                context["events_grouped"] = context["events_grouped"][:count_input]
 
         return context
 
@@ -282,6 +286,13 @@ class BaseArticlePage(Page):
             except ArticlePageImage.DoesNotExist:
                 return None
 
+    def get_default_order(self):
+        """"
+        orders the children of the page by ord (allows reordering the page) if less then 20 child pages
+        if 20 or more pages use the default setting
+        """
+        return '-latest_revision_created_at'
+ 
 
 class ArticlePage(BaseArticlePage):
 
