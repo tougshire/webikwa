@@ -155,8 +155,6 @@ class BaseArticlePage(Page):
 
     CALENDAR_FORMAT_CHOICES=[
         ("EVLS", "event list"),
-        ("MMON", "m-s month grid"),
-        ("SMON", "s-s month grid"), 
         ("DTLS", "date list")
     ]
     body_md = MarkdownField(blank=True, help_text="A markdown version of the body. Both this and the streamfield version body will be displayed if they have content")
@@ -168,6 +166,7 @@ class BaseArticlePage(Page):
     calendars=ParentalManyToManyField('IcalendarPage', blank=True)
     ical_start_span_count = models.CharField("start,span,count", max_length=20, blank=True, default="-1,3660", help_text="Comma separated numbers representing the number of days to the starting date (can be negative), the number of days from the starting date to the ending date, and the max number of events to return")
     calendar_format = models.CharField("calendar format", max_length=4, default="EVLS", choices=CALENDAR_FORMAT_CHOICES, help_text="The format for how the events are displayed")
+    calendar_dt_format = models.CharField("calendar date and time formats", max_length=40, default="D Y M d|g:iA", help_text="The date and time formats separated by a bar ex: D Y M d|g:iA")
     is_creatable = False
 
     class Meta:
@@ -265,7 +264,6 @@ class BaseArticlePage(Page):
             context["events"] = sorted(cd_events, key = lambda event: event["start"])
             if count_input is not None:
                 context["events"] = context["events"][:count_input]
-                
 
             cd_events_grouped_list = []
             for uid in cd_events_grouped:
@@ -274,6 +272,14 @@ class BaseArticlePage(Page):
             context["events_grouped"] = sorted(cd_events_grouped_list, key=lambda event: event["start"])
             if count_input is not None:
                 context["events_grouped"] = context["events_grouped"][:count_input]
+
+            context['datetime_formats'] = {'date':'D Y M d', 'time':'g:iA'}
+            if self.calendar_dt_format:
+                dt_formats = self.calendar_dt_format.split('|')
+                context['datetime_formats']['date'] = dt_formats[0]
+                if len(dt_formats) > 1:
+                    context['datetime_formats']['time'] = dt_formats[1]
+            context['datetime_formats']['datetime'] = "{} {}".format(context['datetime_formats']['date'], context['datetime_formats']['time'])
 
         return context
 
@@ -344,6 +350,7 @@ class ArticlePage(BaseArticlePage):
                 FieldPanel('calendars'),
                 FieldPanel('ical_start_span_count'),
                 FieldPanel('calendar_format'),
+                FieldPanel('calendar_dt_format'),
 
             ],
             heading="Calendar"
@@ -408,6 +415,7 @@ class SidebarArticlePage(BaseArticlePage):
                 FieldPanel('calendars'),
                 FieldPanel('ical_start_span_count'),
                 FieldPanel('calendar_format'),
+                FieldPanel('calendar_dt_format')
 
             ],
             heading="Calendar"
@@ -797,10 +805,15 @@ class IcalendarPage(Page):
 
 class IcalendarLinkPage(Orderable, models.Model):
     icalendar=ParentalKey(IcalendarPage, on_delete=models.CASCADE, null=True, related_name="uid_links")
-    uid=models.TextField(max_length=80,help_text="The UID of the event from ics data")
-    url=models.URLField(max_length=200, blank=True, help_text="The URL")
+    article = ParentalKey(ArticlePage, blank=True, null=True, on_delete=models.SET_NULL, help_text="An article to link to.  Ensure the url field is blank to use this field")
+    uid=models.CharField(max_length=120,help_text="The UID of the event from ics data")
+    url=models.URLField(max_length=200, blank=True, help_text="The URL to link to. Leave blank if linking to an article using the Article field")
     
     panels = [
         FieldPanel("uid"),
-        FieldPanel("url")
+        MultiFieldPanel([
+            FieldPanel("article"),
+            FieldPanel("url"),
+        ], heading="Link")
+
     ]
