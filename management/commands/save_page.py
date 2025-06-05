@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 from webikwa.models import IcalendarPage
 
 class Command(BaseCommand):
-    help = 'Auto saves pages - this is useful for pages like Icalendar pages. ex: \'python manage.py save_page 86 47\' saves pages with ids 86 and 47'
+    help = 'Auto saves pages - this is useful for Icalendar pages. ex: \'python manage.py save_page 86 47\' saves pages with ids 86 and 47'
 
     def add_arguments(self, parser):
         parser.add_argument('page_ids', nargs='+', type=int)
