@@ -7,7 +7,9 @@ from django import forms
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.utils.html import strip_tags
 import icalendar
+import nh3
 import recurring_ical_events
 from modelcluster.fields import ParentalKey, ParentalManyToManyField
 from modelcluster.contrib.taggit import ClusterTaggableManager
@@ -42,6 +44,8 @@ from wagtail.search import index
 from wagtail.snippets.models import register_snippet
 
 from wagtailmarkdown.fields import MarkdownField
+
+import markdown
 
 from .blocks import BodyStreamBlock
 
@@ -232,6 +236,7 @@ class BaseArticlePage(Page):
                 ical_events = recurring_ical_events.of(ical_calendar).between(start_date, end_date)
                 for ical_event in ical_events:
                     cd_event = {}
+                    cd_event['calendar'] = ical.get_url()
                     uid = ical_event["UID"]
                     cd_event["uid"] = uid
                     cd_event["start"] = ical_event["DTSTART"].dt
@@ -789,12 +794,64 @@ class IcalendarPage(Page):
 
     source = models.URLField("source", blank=True, help_text="The ics source which will copied to the data")
     data = models.TextField("body", blank=True, help_text="The ics data. If source is filled in, this will be overwritten. If you wish to edit this field, ensure the source field is blank")
+    is_safe = models.BooleanField("is safe", default=False, help_text="If it's certain that the code from the remote calendar is safe.  This can be dangerous.  Know that you can trust the source before enabling")
 
     content_panels = Page.content_panels + [
         FieldPanel('source'),
         FieldPanel('data'),
         InlinePanel('uid_links',),
+        FieldPanel('is_safe'),
     ]
+        
+    def get_context(self, request):
+
+        context = super().get_context(request)
+        context['sidebars'] = get_sidebars(request)        
+
+        ical_string = self.data
+    
+        try:
+            ical_calendar = icalendar.Calendar.from_ical(ical_string)
+        except ValueError:
+            print("ICAL Parse Error")
+            return context
+        between_start = datetime.datetime.now() + datetime.timedelta(days = -(365 * 5))
+        between_stop = datetime.datetime.now() + datetime.timedelta(days = 365 * 10)
+        
+        ical_events = recurring_ical_events.of(ical_calendar).between(between_start, between_stop)
+        for ical_event in ical_events:
+            cd_event = {}
+            print('tp2556954', ical_event['UID'])
+            print('tp2556955', request.GET.get('uid'))
+
+            if ical_event['UID'] == request.GET.get('uid'):
+                print('tp2556954')
+
+                uid = ical_event["UID"]
+                cd_event["uid"] = uid
+                cd_event["start"] = ical_event["DTSTART"].dt
+                cd_event["start_type"] = type(cd_event["start"]).__name__
+                cd_event["start_d"] =cd_event["start"].date() if cd_event["start_type"] == 'datetime' else cd_event["start"]
+
+                cd_event["end"] =ical_event["DTEND"].dt
+
+                try:
+                    cd_event["summary"] = ical_event["SUMMARY"]
+                except KeyError:
+                    cd_event["summary"] = ""
+                try:
+                    description = ical_event['DESCRIPTION']
+                    if not self.is_safe:
+                        description = nh3.clean(description)
+                    cd_event["description"] = description
+                except KeyError:
+                    cd_event["description"] = ""
+
+                break
+
+        context["event"] = cd_event
+
+        return context
 
     def save(self, *args, **kwargs):
         if self.source:
