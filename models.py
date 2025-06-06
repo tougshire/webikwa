@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import zoneinfo
 from django import forms
 from django.db import models
 from django.conf import settings
@@ -241,8 +242,8 @@ class BaseArticlePage(Page):
                     cd_event["uid"] = uid
                     cd_event["start"] = ical_event["DTSTART"].dt
                     cd_event["start_type"] = type(cd_event["start"]).__name__
-                    cd_event["start_d"] =cd_event["start"].date() if cd_event["start_type"] == 'datetime' else cd_event["start"]
-
+                    cd_event["start_d"] = cd_event["start"].date() if cd_event["start_type"] == 'datetime' else cd_event["start"]
+                    cd_event["start_dt"] = cd_event["start"] if cd_event["start_type"] == 'datetime' else datetime.datetime(cd_event["start"].year, cd_event["start"].month, cd_event["start"].day, tzinfo=zoneinfo.ZoneInfo(settings.TIME_ZONE))
                     cd_event["end"] =ical_event["DTEND"].dt
 
                     try:
@@ -266,7 +267,7 @@ class BaseArticlePage(Page):
                         if cd_event["start"] < cd_events_grouped[uid]["start"]:
                             cd_events_grouped[uid]["start"] = cd_event["start"]
                 
-            context["events"] = sorted(cd_events, key = lambda event: event["start"])
+            context["events"] = sorted(cd_events, key = lambda event: event["start_dt"])
             if count_input is not None:
                 context["events"] = context["events"][:count_input]
 
@@ -274,7 +275,7 @@ class BaseArticlePage(Page):
             for uid in cd_events_grouped:
                 cd_events_grouped[uid]["starts"].sort()
                 cd_events_grouped_list.append(cd_events_grouped[uid])
-            context["events_grouped"] = sorted(cd_events_grouped_list, key=lambda event: event["start"])
+            context["events_grouped"] = sorted(cd_events_grouped_list, key=lambda event: event["start_d"])
             if count_input is not None:
                 context["events_grouped"] = context["events_grouped"][:count_input]
 
