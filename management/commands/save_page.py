@@ -1,5 +1,9 @@
+import logging
+
 from django.core.management.base import BaseCommand, CommandError
 from webikwa.models import IcalendarPage
+
+logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = 'Auto saves pages - this is useful for Icalendar pages. ex: \'python manage.py save_page 86 47\' saves pages with ids 86 and 47'
@@ -16,4 +20,6 @@ class Command(BaseCommand):
 
             page.save() #Icalendar pages will rewrite their data upon save
 
-            self.stdout.write(self.style.SUCCESS('Successfully upated page "%s"' % page_id))
+            logger.info('Successfully upated page "%s"' % page_id)
+
+#            self.stdout.write(self.style.SUCCESS('Successfully upated page "%s"' % page_id))
