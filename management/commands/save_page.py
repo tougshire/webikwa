@@ -20,6 +20,6 @@ class Command(BaseCommand):
 
             page.save() #Icalendar pages will rewrite their data upon save
 
-            logger.info('Successfully upated page "%s"' % page_id)
+#            logger.info('Successfully upated page "%s"' % page_id)
 
 #            self.stdout.write(self.style.SUCCESS('Successfully upated page "%s"' % page_id))
