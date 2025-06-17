@@ -228,6 +228,11 @@ class BaseArticlePage(Page):
                 for link in ical.uid_links.all():
                     uidlinks[link.uid]=link.url
 
+                uidblocks=[]
+                for block in ical.uid_blocks.all():
+                    if block.uid > "":
+                        uidblocks.append(block.uid)
+
                 try:
                     ical_calendar = icalendar.Calendar.from_ical(ical_string)
                 except ValueError:
@@ -236,36 +241,37 @@ class BaseArticlePage(Page):
 
                 ical_events = recurring_ical_events.of(ical_calendar).between(start_date, end_date)
                 for ical_event in ical_events:
-                    cd_event = {}
-                    cd_event['calendar'] = ical.get_url()
-                    uid = ical_event["UID"]
-                    cd_event["uid"] = uid
-                    cd_event["start"] = ical_event["DTSTART"].dt
-                    cd_event["start_type"] = type(cd_event["start"]).__name__
-                    cd_event["start_d"] = cd_event["start"].date() if cd_event["start_type"] == 'datetime' else cd_event["start"]
-                    cd_event["start_dt"] = cd_event["start"] if cd_event["start_type"] == 'datetime' else datetime.datetime(cd_event["start"].year, cd_event["start"].month, cd_event["start"].day, tzinfo=zoneinfo.ZoneInfo(settings.TIME_ZONE))
-                    cd_event["end"] =ical_event["DTEND"].dt
+                    if ical_event['UID'] not in uidblocks:
+                        cd_event = {}
+                        uid = ical_event["UID"]
+                        cd_event["uid"] = uid
+                        cd_event['calendar'] = ical.get_url()
+                        cd_event["start"] = ical_event["DTSTART"].dt
+                        cd_event["start_type"] = type(cd_event["start"]).__name__
+                        cd_event["start_d"] = cd_event["start"].date() if cd_event["start_type"] == 'datetime' else cd_event["start"]
+                        cd_event["start_dt"] = cd_event["start"] if cd_event["start_type"] == 'datetime' else datetime.datetime(cd_event["start"].year, cd_event["start"].month, cd_event["start"].day, tzinfo=zoneinfo.ZoneInfo(settings.TIME_ZONE))
+                        cd_event["end"] =ical_event["DTEND"].dt
 
-                    try:
-                        cd_event["summary"] = ical_event["SUMMARY"]
-                    except KeyError:
-                        cd_event["summary"] = ""
-                    try:
-                        cd_event["description"] = ical_event["DESCRIPTION"]
-                    except KeyError:
-                        cd_event["description"] = ""
+                        try:
+                            cd_event["summary"] = ical_event["SUMMARY"]
+                        except KeyError:
+                            cd_event["summary"] = ""
+                        try:
+                            cd_event["description"] = ical_event["DESCRIPTION"]
+                        except KeyError:
+                            cd_event["description"] = ""
 
-                    if ical_event["UID"] in uidlinks:
-                        cd_event["link"] = uidlinks[ical_event["UID"]]
+                        if ical_event["UID"] in uidlinks:
+                            cd_event["link"] = uidlinks[ical_event["UID"]]
 
-                    cd_events.append(cd_event)
-                    if uid not in cd_events_grouped:
-                        cd_events_grouped[uid] = cd_event
-                        cd_events_grouped[uid]["starts"] = [ cd_event["start"] ]
-                    else:
-                        cd_events_grouped[uid]["starts"].append( cd_event["start"])
-                        if cd_event["start"] < cd_events_grouped[uid]["start"]:
-                            cd_events_grouped[uid]["start"] = cd_event["start"]
+                        cd_events.append(cd_event)
+                        if uid not in cd_events_grouped:
+                            cd_events_grouped[uid] = cd_event
+                            cd_events_grouped[uid]["starts"] = [ cd_event["start"] ]
+                        else:
+                            cd_events_grouped[uid]["starts"].append( cd_event["start"])
+                            if cd_event["start"] < cd_events_grouped[uid]["start"]:
+                                cd_events_grouped[uid]["start"] = cd_event["start"]
                 
             context["events"] = sorted(cd_events, key = lambda event: event["start_dt"])
             if count_input is not None:
@@ -801,6 +807,7 @@ class IcalendarPage(Page):
         FieldPanel('source'),
         FieldPanel('data'),
         InlinePanel('uid_links',),
+        InlinePanel('uid_blocks',),
         FieldPanel('is_safe'),
     ]
         
@@ -822,11 +829,8 @@ class IcalendarPage(Page):
         ical_events = recurring_ical_events.of(ical_calendar).between(between_start, between_stop)
         for ical_event in ical_events:
             cd_event = {}
-            print('tp2556954', ical_event['UID'])
-            print('tp2556955', request.GET.get('uid'))
 
             if ical_event['UID'] == request.GET.get('uid'):
-                print('tp2556954')
 
                 uid = ical_event["UID"]
                 cd_event["uid"] = uid
@@ -874,4 +878,12 @@ class IcalendarLinkPage(Orderable, models.Model):
             FieldPanel("url"),
         ], heading="Link")
 
+    ]
+
+# Prevent display of certain events
+class IcalendarBlockPage(Orderable, models.Model):
+    icalendar=ParentalKey(IcalendarPage, on_delete=models.CASCADE, null=True, related_name="uid_blocks")
+    uid=models.CharField(max_length=120,help_text="The UID of the event to block, from ics data")    
+    panels = [
+        FieldPanel("uid"),
     ]
