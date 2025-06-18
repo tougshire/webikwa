@@ -875,7 +875,7 @@ class IcalendarLinkPage(Orderable, models.Model):
     def save(self, *args, **kwargs):
 
         if self.article:
-            self.url = self.article.url
+            self.url = self.article.full_url
 
         return super().save(*args, **kwargs)
 
