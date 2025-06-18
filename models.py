@@ -859,6 +859,7 @@ class IcalendarPage(Page):
         return context
 
     def save(self, *args, **kwargs):
+
         if self.source:
             calendar_response = requests.get(self.source)    
             self.data = calendar_response.text
@@ -871,6 +872,14 @@ class IcalendarLinkPage(Orderable, models.Model):
     uid=models.CharField(max_length=120,help_text="The UID of the event from ics data")
     url=models.URLField(max_length=200, blank=True, help_text="The URL to link to. Leave blank if linking to an article using the Article field")
     
+    def save(self, *args, **kwargs):
+
+        if self.article:
+            self.url = self.article.url
+
+        return super().save(*args, **kwargs)
+
+
     panels = [
         FieldPanel("uid"),
         MultiFieldPanel([
@@ -879,6 +888,8 @@ class IcalendarLinkPage(Orderable, models.Model):
         ], heading="Link")
 
     ]
+
+
 
 # Prevent display of certain events
 class IcalendarBlockPage(Orderable, models.Model):
