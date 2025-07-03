@@ -21,8 +21,8 @@ These instructions are written with the assumption that you're starting a new pr
 - add the following to INSTALLED_APPS:
   - "wagtail.contrib.settings"
   - "wagtail_modeladmin"
-    - "wagtailmarkdown"
-    - "wagtail.contrib.table_block",
+  - "wagtailmarkdown"
+  - "wagtail.contrib.table_block",
   - "touglates"
   - "webikwa_templates"
   - "webikwa"
