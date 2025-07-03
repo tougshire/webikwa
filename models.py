@@ -867,6 +867,7 @@ class IcalendarPage(Page):
         return super().save(*args, **kwargs)
 
 class IcalendarLinkPage(Orderable, models.Model):
+
     icalendar=ParentalKey(IcalendarPage, on_delete=models.CASCADE, null=True, related_name="uid_links")
     article = ParentalKey(ArticlePage, blank=True, null=True, on_delete=models.SET_NULL, help_text="An article to link to.  Ensure the url field is blank to use this field")
     uid=models.CharField(max_length=120,help_text="The UID of the event from ics data")
