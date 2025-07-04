@@ -129,14 +129,9 @@ WAGTAILMARKDOWN = {
     - For page title, enter "Python Software Foundation Events"
     - For source, enter "https://www.google.com/calendar/ical/3haig2m9msslkpf2tn1h56nn9g@group.calendar.google.com/public/basic.ics"
     - Publish the page
-  <!-- - Create an Icalendar Combiner Page
-    - Click "Ical Combiners", then Add Icalendar Combiner
-    - For title, enter "Python Events"
-    - Select the Python Software Foundation Calendar
-    - Publish the page -->
-  - Add the combiner to the sidebar
-    - Click "Pages", then "Home", then "Left Sidebar"
-    - Click the three dots, then "Add child page"
+  - Creae a Combiner Page and Add it to the sidebar
+    - Click "Pages", then "Home", then the child page icon ">" for "Left Sidebar"
+    - Click the icon to add a child page
     - Choose "Icalendar Combiner"
     - For title, enter "Python Events"
     - Select the Python Software Foundation Calendar

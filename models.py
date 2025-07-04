@@ -315,13 +315,13 @@ class ArticlePage(BaseArticlePage):
 class IcalCombinerPage(BaseArticlePage):
 
     CALENDAR_FORMAT_CHOICES=[
-        ("EVLS", "event list"),
+#        ("EVLS", "event list"),
         ("DTLS", "date list")
     ]
 
     calendars=ParentalManyToManyField('IcalendarPage', blank=True)
     ical_start_span_count = models.CharField("start,span,count", max_length=20, blank=True, default="-1,3660", help_text="Comma separated numbers representing the number of days to the starting date (can be negative), the number of days from the starting date to the ending date, and the max number of events to return")
-    calendar_format = models.CharField("calendar format", max_length=4, default="EVLS", choices=CALENDAR_FORMAT_CHOICES, help_text="The format for how the events are displayed")
+    calendar_format = models.CharField("calendar format", max_length=4, default="DTLS", choices=CALENDAR_FORMAT_CHOICES, help_text="(choices unavailable for now) The format for how the events are displayed")
     calendar_dt_format = models.CharField("calendar date and time formats", max_length=40, default="D Y M d|g:iA", help_text="The date and time formats separated by a bar ex: D Y M d|g:iA")
 
     parent_page_types = ["SidebarPage"]
@@ -336,7 +336,7 @@ class IcalCombinerPage(BaseArticlePage):
             [
                 FieldPanel('calendars'),
                 FieldPanel('ical_start_span_count'),
-                FieldPanel('calendar_format'),
+#                FieldPanel('calendar_format'),
                 FieldPanel('calendar_dt_format'),
 
             ],
@@ -345,6 +345,7 @@ class IcalCombinerPage(BaseArticlePage):
     ]
 
     def get_context(self, request):
+
         context=super().get_context(request)
 
         if self.calendars:
@@ -855,53 +856,7 @@ class IcalendarPage(Page):
         FieldPanel('delete_stale_links_blocks'),
         FieldPanel('is_safe'),
     ]
-        
-    def get_context(self, request):
-
-        context = super().get_context(request)
-        context['sidebars'] = get_sidebars(request)        
-
-        ical_string = self.data
-    
-        try:
-            ical_calendar = icalendar.Calendar.from_ical(ical_string)
-        except ValueError:
-            print("ICAL Parse Error")
-            return context
-        between_start = datetime.datetime.now() + datetime.timedelta(days = -(365 * 5))
-        between_stop = datetime.datetime.now() + datetime.timedelta(days = 365 * 10)
-        
-        ical_events = recurring_ical_events.of(ical_calendar).between(between_start, between_stop)
-        for ical_event in ical_events:
-            cd_event = {}
-
-            if ical_event['UID'] == request.GET.get('uid'):
-
-                uid = ical_event["UID"]
-                cd_event["uid"] = uid
-                cd_event["start"] = ical_event["DTSTART"].dt
-                cd_event["start_type"] = type(cd_event["start"]).__name__
-                cd_event["start_d"] =cd_event["start"].date() if cd_event["start_type"] == 'datetime' else cd_event["start"]
-
-                cd_event["end"] =ical_event["DTEND"].dt
-
-                try:
-                    cd_event["summary"] = ical_event["SUMMARY"]
-                except KeyError:
-                    cd_event["summary"] = ""
-                try:
-                    description = ical_event['DESCRIPTION']
-                    if not self.is_safe:
-                        description = nh3.clean(description)
-                    cd_event["description"] = description
-                except KeyError:
-                    cd_event["description"] = ""
-
-                break
-
-        context["event"] = cd_event
-
-        return context
+            
 
     def save(self, *args, **kwargs):
 
