@@ -58,11 +58,19 @@ def get_sidebars(request):
             child={
                 "title":childpage.title, 
                 "body_md":childpage.specific.body_md, 
-                "body_sf":childpage.specific.body_sf, 
-                "calendar_format":childpage.specific.calendar_format, 
-                "context": childpage.specific.get_context(request)}
+                "body_sf":childpage.specific.body_sf,      
+                "context": childpage.specific.get_context(request),
+            }
+            try:
+                child["calendar_format"]=childpage.specific.calendar_format
+
+            except AttributeError:
+                pass
+
             sidebar["children"].append(child)
+
         sidebars.append(sidebar)
+
     return sidebars
 
 class RedirectPage(Page):
@@ -129,6 +137,30 @@ class ArticleIndexPage(Page):
 
         return context
 
+class IcalendarIndexPage(Page):
+    intro = RichTextField(blank=True)
+    show_pagetitle=models.BooleanField( default=True, help_text="If the page title should be shown" )
+
+    subpage_types = ["IcalendarPage"]
+
+    content_panels = Page.content_panels + [
+        FieldPanel('show_pagetitle'),
+        FieldPanel('intro'),
+    ]
+
+    def get_context(self, request):
+
+        context = super().get_context(request)
+
+        iCalCombinerPages = iCalCombinerPage.objects.live()
+
+        context['iCalCombinerpages'] = iCalCombinerPages
+
+        context['sidebars'] = get_sidebars(request)
+
+        return context
+
+
 class SidebarPage(Page):
     intro = RichTextField(blank=True)
     show_pagetitle=models.BooleanField( default=True, help_text="If the page title should be shown" )
@@ -158,20 +190,12 @@ class ArticlePageTag(TaggedItemBase):
 
 class BaseArticlePage(Page):
 
-    CALENDAR_FORMAT_CHOICES=[
-        ("EVLS", "event list"),
-        ("DTLS", "date list")
-    ]
     body_md = MarkdownField(blank=True, help_text="A markdown version of the body. Both this and the streamfield version body will be displayed if they have content")
     body_sf = StreamField(BodyStreamBlock(), blank=True, use_json_field=True, help_text="A streamfield version of the body. Both this and the markdown version body will be displayed if they have content")
     embed_url = models.URLField("Embed Target URL", max_length=765, blank=True, help_text="For pages with an iFrame, the URL of the embedded contnet")
     embed_frame_style = models.CharField("Frame Style", max_length=255, blank=True, default="width:90%; height:1600px;", help_text="For pages with an iFrame, styling for the frame")
     document = models.ForeignKey(get_document_model(), null=True,blank=True,on_delete=models.SET_NULL,)
     show_doc_link = models.BooleanField("show doc link", default=True, help_text="Show the document link automatically.  One reason to set false would be you're already placing a link in the body")
-    calendars=ParentalManyToManyField('IcalendarPage', blank=True)
-    ical_start_span_count = models.CharField("start,span,count", max_length=20, blank=True, default="-1,3660", help_text="Comma separated numbers representing the number of days to the starting date (can be negative), the number of days from the starting date to the ending date, and the max number of events to return")
-    calendar_format = models.CharField("calendar format", max_length=4, default="EVLS", choices=CALENDAR_FORMAT_CHOICES, help_text="The format for how the events are displayed")
-    calendar_dt_format = models.CharField("calendar date and time formats", max_length=40, default="D Y M d|g:iA", help_text="The date and time formats separated by a bar ex: D Y M d|g:iA")
     is_creatable = False
 
     class Meta:
@@ -193,6 +217,135 @@ class BaseArticlePage(Page):
             if allow_embed:
                 context['embed_url'] = self.embed_url
                 context['embed_frame_style'] = self.embed_frame_style
+
+        return context
+
+    def featured_image(self):
+        try:
+            return self.article_images.filter(is_featured=True).first()
+        except ArticlePageImage.DoesNotExist:
+            try:
+                return self.article_images.first()
+            except ArticlePageImage.DoesNotExist:
+                return None
+
+    def get_default_order(self):
+        """"
+        orders the children of the page by ord (allows reordering the page) if less then 20 child pages
+        if 20 or more pages use the default setting
+        """
+        return '-latest_revision_created_at'
+ 
+
+class ArticlePage(BaseArticlePage):
+
+    date = models.DateField("Post date", default=datetime.date.today)
+    summary = models.CharField(max_length=250, blank=True, help_text='A summary to be displayed instead of the body for index views')
+
+    authors = ParentalManyToManyField('webikwa.Author', blank=True)
+    tags = ClusterTaggableManager(through=ArticlePageTag, blank=True)
+
+    show_gallery = models.BooleanField("show gallery", default=True, help_text="Show the gallery")
+
+    parent_page_types = ["ArticleIndexPage"]
+
+    content_panels = Page.content_panels + [
+        MultiFieldPanel(
+            [
+                FieldPanel('date'),
+                FieldPanel('authors', widget=forms.CheckboxSelectMultiple),
+                FieldPanel('tags'),
+            ],
+            heading="Article information"
+        ),
+        FieldPanel('summary'),
+        FieldPanel('body_md'),
+        FieldPanel('body_sf'),
+        MultiFieldPanel(
+            [
+                FieldPanel('document'),
+                FieldPanel('show_doc_link'),
+            ],
+            heading="Document"
+        ),
+        MultiFieldPanel(
+            [
+                InlinePanel('article_images', label="Article images"),
+                InlinePanel('gallery_images', label="Gallery images"),
+                FieldPanel('show_gallery'),
+            ]
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel('embed_url'),
+                FieldPanel('embed_frame_style'),
+            ],
+            heading="Embedded Content"
+        ),
+    ]
+
+    search_fields = Page.search_fields + [
+        index.SearchField('summary'),
+        index.SearchField('body_md'),
+        index.SearchField('body_sf'),
+    ]
+
+
+    class Meta:
+        verbose_name = "Article"
+
+    def get_tags(self):
+        tag_list=[ tag.name for tag in self.tags.all().order_by("name") ]
+        return ",".join(tag_list)
+
+    def get_context(self, request):
+        context=super().get_context(request)
+
+        context['sidebars'] = get_sidebars(request)
+
+        context['visible_tags']=[]
+        for tag in context['page'].tags.all():
+
+            if not tag.name[0] == '_':
+                context['visible_tags'].append(tag)
+
+
+        return context
+
+class IcalCombinerPage(BaseArticlePage):
+
+    CALENDAR_FORMAT_CHOICES=[
+        ("EVLS", "event list"),
+        ("DTLS", "date list")
+    ]
+
+    calendars=ParentalManyToManyField('IcalendarPage', blank=True)
+    ical_start_span_count = models.CharField("start,span,count", max_length=20, blank=True, default="-1,3660", help_text="Comma separated numbers representing the number of days to the starting date (can be negative), the number of days from the starting date to the ending date, and the max number of events to return")
+    calendar_format = models.CharField("calendar format", max_length=4, default="EVLS", choices=CALENDAR_FORMAT_CHOICES, help_text="The format for how the events are displayed")
+    calendar_dt_format = models.CharField("calendar date and time formats", max_length=40, default="D Y M d|g:iA", help_text="The date and time formats separated by a bar ex: D Y M d|g:iA")
+
+    parent_page_types = ["SidebarPage"]
+
+    class Meta:
+        verbose_name = "iCalendar Combiner"
+        
+
+    content_panels = Page.content_panels + [
+
+        MultiFieldPanel(
+            [
+                FieldPanel('calendars'),
+                FieldPanel('ical_start_span_count'),
+                FieldPanel('calendar_format'),
+                FieldPanel('calendar_dt_format'),
+
+            ],
+            heading="Calendar"
+        )
+    ]
+
+    def get_context(self, request):
+        context=super().get_context(request)
 
         if self.calendars:
 
@@ -295,108 +448,6 @@ class BaseArticlePage(Page):
 
         return context
 
-    def featured_image(self):
-        try:
-            return self.article_images.filter(is_featured=True).first()
-        except ArticlePageImage.DoesNotExist:
-            try:
-                return self.article_images.first()
-            except ArticlePageImage.DoesNotExist:
-                return None
-
-    def get_default_order(self):
-        """"
-        orders the children of the page by ord (allows reordering the page) if less then 20 child pages
-        if 20 or more pages use the default setting
-        """
-        return '-latest_revision_created_at'
- 
-
-class ArticlePage(BaseArticlePage):
-
-    date = models.DateField("Post date", default=datetime.date.today)
-    summary = models.CharField(max_length=250, blank=True, help_text='A summary to be displayed instead of the body for index views')
-
-    authors = ParentalManyToManyField('webikwa.Author', blank=True)
-    tags = ClusterTaggableManager(through=ArticlePageTag, blank=True)
-
-    show_gallery = models.BooleanField("show gallery", default=True, help_text="Show the gallery")
-
-    parent_page_types = ["ArticleIndexPage"]
-
-    content_panels = Page.content_panels + [
-        MultiFieldPanel(
-            [
-                FieldPanel('date'),
-                FieldPanel('authors', widget=forms.CheckboxSelectMultiple),
-                FieldPanel('tags'),
-            ],
-            heading="Article information"
-        ),
-        FieldPanel('summary'),
-        FieldPanel('body_md'),
-        FieldPanel('body_sf'),
-        MultiFieldPanel(
-            [
-                FieldPanel('document'),
-                FieldPanel('show_doc_link'),
-            ],
-            heading="Document"
-        ),
-        MultiFieldPanel(
-            [
-                InlinePanel('article_images', label="Article images"),
-                InlinePanel('gallery_images', label="Gallery images"),
-                FieldPanel('show_gallery'),
-            ]
-        ),
-        MultiFieldPanel(
-            [
-                FieldPanel('embed_url'),
-                FieldPanel('embed_frame_style'),
-            ],
-            heading="Embedded Content"
-        ),
-        MultiFieldPanel(
-            [
-                FieldPanel('calendars'),
-                FieldPanel('ical_start_span_count'),
-                FieldPanel('calendar_format'),
-                FieldPanel('calendar_dt_format'),
-
-            ],
-            heading="Calendar"
-        )
-    ]
-
-    search_fields = Page.search_fields + [
-        index.SearchField('summary'),
-        index.SearchField('body_md'),
-        index.SearchField('body_sf'),
-    ]
-
-
-    class Meta:
-        verbose_name = "Article"
-
-    def get_tags(self):
-        tag_list=[ tag.name for tag in self.tags.all().order_by("name") ]
-        return ",".join(tag_list)
-
-    def get_context(self, request):
-        context=super().get_context(request)
-
-        context['sidebars'] = get_sidebars(request)
-
-        context['visible_tags']=[]
-        for tag in context['page'].tags.all():
-
-            if not tag.name[0] == '_':
-                context['visible_tags'].append(tag)
-
-
-        return context
-
 class SidebarArticlePage(BaseArticlePage):
 
     date = models.DateField("Post date", default=datetime.date.today)
@@ -421,16 +472,6 @@ class SidebarArticlePage(BaseArticlePage):
                 FieldPanel('embed_frame_style'),
             ],
             heading="Embedded Content"
-        ),
-        MultiFieldPanel(
-            [
-                FieldPanel('calendars'),
-                FieldPanel('ical_start_span_count'),
-                FieldPanel('calendar_format'),
-                FieldPanel('calendar_dt_format')
-
-            ],
-            heading="Calendar"
         ),
 
     ]
@@ -802,12 +843,16 @@ class IcalendarPage(Page):
     source = models.URLField("source", blank=True, help_text="The ics source which will copied to the data")
     data = models.TextField("body", blank=True, help_text="The ics data. If source is filled in, this will be overwritten. If you wish to edit this field, ensure the source field is blank")
     is_safe = models.BooleanField("is safe", default=False, help_text="If it's certain that the code from the remote calendar is safe.  This can be dangerous.  Know that you can trust the source before enabling")
+    delete_stale_links_blocks = models.BooleanField("delete stale links & blocks", default=True, help_text="Upon save, automaticall delete links and blocks for events that are no longer on this calendar")
+
+    parent_page_types = ["IcalendarIndexPage"]
 
     content_panels = Page.content_panels + [
         FieldPanel('source'),
         FieldPanel('data'),
-        InlinePanel('uid_links',),
-        InlinePanel('uid_blocks',),
+        InlinePanel('uid_links'),
+        InlinePanel('uid_blocks'),
+        FieldPanel('delete_stale_links_blocks'),
         FieldPanel('is_safe'),
     ]
         
@@ -864,7 +909,15 @@ class IcalendarPage(Page):
             calendar_response = requests.get(self.source)    
             self.data = calendar_response.text
 
-        return super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
+
+        if self.delete_stale_links_blocks:
+            for uid_link in self.uid_links.all():
+                if uid_link.uid not in self.data:
+                    uid_link.delete()
+            for uid_block in self.uid_blocks.all():
+                if uid_block.uid not in self.data:
+                    uid_block.delete()
 
 class IcalendarLinkPage(Orderable, models.Model):
 

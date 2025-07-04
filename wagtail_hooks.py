@@ -1,6 +1,6 @@
 from wagtail_modeladmin.options import ModelAdmin, modeladmin_register, hooks
 from wagtail.admin.viewsets.pages import PageListingViewSet
-from .models import ArticlePage, IcalendarPage, SidebarArticlePage
+from .models import ArticlePage, IcalCombinerPage, IcalendarPage, SidebarArticlePage
 from wagtail.admin.ui.tables import Column
 from wagtail.admin.panels import FieldPanel
 from wagtail.snippets.models import register_snippet
@@ -41,15 +41,29 @@ sidebar_article_page_listing_viewset = SidebarArticlePageListingViewSet("sidebar
 def register_sidebar_article_page_listing_viewset():
     return sidebar_article_page_listing_viewset
 
+class IcalCombinerPageListingViewSet(PageListingViewSet):
+    icon = "calendar"
+    menu_order = 110  # will put in 3rd place (000 being 1st, 100 2nd)
+    menu_label = "iCal Combiners"
+    add_to_admin_menu = True
+    model = IcalCombinerPage
+
+
+IcalCombiner_page_listing_viewset = IcalCombinerPageListingViewSet("Icalendar_Combiner_pages")
+@hooks.register("register_admin_viewset")
+def register_IcalCombiner_page_listing_viewset():
+    return IcalCombiner_page_listing_viewset
+
+
 class IcalendarPageListingViewSet(PageListingViewSet):
     icon = "calendar"
     menu_order = 110  # will put in 3rd place (000 being 1st, 100 2nd)
-    menu_label = "Calendars"
+    menu_label = "iCalendars"
     add_to_admin_menu = True
     model = IcalendarPage
 
 
-icalendar_page_listing_viewset = IcalendarPageListingViewSet("Icalenda_pages")
+icalendar_page_listing_viewset = IcalendarPageListingViewSet("Icalendar_pages")
 @hooks.register("register_admin_viewset")
 def register_icalendar_page_listing_viewset():
     return icalendar_page_listing_viewset

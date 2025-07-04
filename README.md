@@ -15,6 +15,8 @@ These instructions are written with the assumption that you're starting a new pr
 - create a new Wagtail project (see [Wagtail's instructions](https://docs.wagtail.org/en/v6.2.1/getting_started/) )
 - pip install [wagtail-markdown](https://pypi.org/project/wagtail-markdown/)
 - pip install [wagtail_modeladmin](https://pypi.org/project/wagtail-modeladmin/)
+- pip install [recurring-ical-events](https://pypi.org/project/recurring-ical-events/)
+- pip install [nh3](https://pypi.org/project/nh3/)
 - git clone [https://github.com/tougshire/touglates](https://github.com/tougshire/touglates)
 - git clone [https://github.com/tougshire/webikwa_templates](https://github.com/tougshire/webikwa_templates)
 - git clone [https://github.com/tougshire/webikwa](https://github.com/tougshire/webikwa)
@@ -57,7 +59,7 @@ WAGTAILMARKDOWN = {
   - name it "Featured Articles"
   - under "Tags included" enter "\_f1,\_f2;\_f3,\_f4;\_f5" (don't include quotation marks a any point in these instructions unless specified)
   - under "Full Body Groups", enter 1
-    - publish the page
+  - publish the page
 - create a new redirect page
   - from root, create a new redirect page
   - name it "Home"
@@ -93,7 +95,7 @@ WAGTAILMARKDOWN = {
   - For the title, type "Left Sidebar"
   - Uncheck "Show pagetitle"
   - For location, choose "Left"
-  - Save the page
+  - Publish the page
 - Enable the sidebar
   - In the admin sidebar, click "Settings", then "Site Template Settings"
   - Check "Show leftbar"
@@ -115,4 +117,27 @@ WAGTAILMARKDOWN = {
   - For tags, type "about"
   - Type anyth appropriate for summary and body
   - Publish the page
-- Visit the site and check the menu
+  - Visit the site and check the menu
+- Create a Sidebar Calendar
+  - Create an Icalendar Index Page
+    - Click "Pages", then "Home"
+    - Click the child page icon and click "Icalendar Index Page"
+    - For title, enter "iCalendars"
+    - Publish the page
+  - Create an Icalendar Page
+    - Click "icalendars", then "Add icalendar page" 
+    - For page title, enter "Python Software Foundation Events"
+    - For source, enter "https://www.google.com/calendar/ical/3haig2m9msslkpf2tn1h56nn9g@group.calendar.google.com/public/basic.ics"
+    - Publish the page
+  <!-- - Create an Icalendar Combiner Page
+    - Click "Ical Combiners", then Add Icalendar Combiner
+    - For title, enter "Python Events"
+    - Select the Python Software Foundation Calendar
+    - Publish the page -->
+  - Add the combiner to the sidebar
+    - Click "Pages", then "Home", then "Left Sidebar"
+    - Click the three dots, then "Add child page"
+    - Choose "Icalendar Combiner"
+    - For title, enter "Python Events"
+    - Select the Python Software Foundation Calendar
+    - Publish the page
